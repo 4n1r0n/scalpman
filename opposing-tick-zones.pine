@@ -1,0 +1,202 @@
+//@version=6
+// Opposing Tick Zones
+// Version 0.1
+// From TradingLab's short "How To Find PERFECT Entries" (https://www.youtube.com/shorts/tS9o8aQjADY).
+// On the 1 hour chart they mark the highest tick of the lowest bar and the lowest tick of the
+// highest bar. Those bars are the demand and supply areas. Whichever area is hit first is the
+// side. Enter when that area holds and price comes back to the marked tick.
+// Swing strength is the mechanical stand-in for marking those two bars by eye.
+indicator("Opposing Tick Zones", "Opposing Ticks", overlay=true, max_boxes_count=8, max_lines_count=12, max_labels_count=12)
+
+strength = input.int(3, "Swing strength", minval=1, maxval=20, tooltip="Bars on each side that prove a candle is the highest or lowest bar of the trend. The short marks those bars by eye on the 1 hour chart.")
+
+ph = ta.pivothigh(high, strength, strength)
+pl = ta.pivotlow(low, strength, strength)
+
+var float dTop = na
+var float dBot = na
+var int dBar = na
+var float sTop = na
+var float sBot = na
+var int sBar = na
+
+// 0 idle, 1 armed, 2 biased, 3 respected, 4 entered, 5 invalid
+var int phase = 0
+var int side = 0
+var bool leftZone = false
+var float entryPx = na
+var float stopPx = na
+var float targetPx = na
+
+var box dBox = na
+var box sBox = na
+var line dTick = na
+var line sTick = na
+var line stopLine = na
+var line targetLine = na
+var label info = na
+
+replaced = false
+
+if not na(ph) and (na(sTop) or ph > sTop)
+    sTop := ph
+    sBot := low[strength]
+    sBar := bar_index - strength
+    replaced := true
+
+if not na(pl) and (na(dBot) or pl < dBot)
+    dTop := high[strength]
+    dBot := pl
+    dBar := bar_index - strength
+    replaced := true
+
+if replaced
+    phase := 0
+    side := 0
+    leftZone := false
+    entryPx := na
+    stopPx := na
+    targetPx := na
+
+separated = not na(dTop) and not na(sTop) and dTop < sBot and dBar != sBar
+breaking = separated and phase != 4 and (low < dBot or high > sTop)
+inGap = separated and low > dTop and high < sBot
+hitDemand = separated and low <= dTop and high >= dBot
+hitSupply = separated and high >= sBot and low <= sTop
+
+longEntry = false
+shortEntry = false
+
+if not separated
+    phase := 0
+    side := 0
+    leftZone := false
+else if breaking
+    phase := 5
+    leftZone := false
+else if phase == 0 and inGap
+    phase := 1
+else if phase == 1 and hitDemand and not hitSupply
+    side := 1
+    if close > dTop
+        phase := 3
+        leftZone := low > dTop
+    else
+        phase := 2
+        leftZone := false
+else if phase == 1 and hitSupply and not hitDemand
+    side := -1
+    if close < sBot
+        phase := 3
+        leftZone := high < sBot
+    else
+        phase := 2
+        leftZone := false
+else if phase == 2 and side == 1 and close > dTop
+    phase := 3
+    leftZone := low > dTop
+else if phase == 2 and side == -1 and close < sBot
+    phase := 3
+    leftZone := high < sBot
+else if phase == 3 and side == 1
+    if leftZone and low <= dTop and close > dTop and not hitSupply
+        phase := 4
+        leftZone := false
+        longEntry := true
+        entryPx := dTop
+        stopPx := dBot
+        targetPx := sTop
+    else
+        leftZone := low > dTop
+else if phase == 3 and side == -1
+    if leftZone and high >= sBot and close < sBot and not hitDemand
+        phase := 4
+        leftZone := false
+        shortEntry := true
+        entryPx := sBot
+        stopPx := sTop
+        targetPx := dBot
+    else
+        leftZone := high < sBot
+
+demandColor = color.new(#3cba7a, 0)
+supplyColor = color.new(#e36a5c, 0)
+tickColor = color.new(#e3b15a, 0)
+
+if separated
+    if na(dBox)
+        dBox := box.new(dBar, dTop, bar_index + 1, dBot, border_color=color.new(demandColor, 35), bgcolor=color.new(demandColor, 88))
+        sBox := box.new(sBar, sTop, bar_index + 1, sBot, border_color=color.new(supplyColor, 35), bgcolor=color.new(supplyColor, 88))
+        dTick := line.new(dBar, dTop, bar_index + 1, dTop, color=tickColor, style=line.style_dashed, width=1)
+        sTick := line.new(sBar, sBot, bar_index + 1, sBot, color=tickColor, style=line.style_dashed, width=1)
+    else
+        box.set_left(dBox, dBar)
+        box.set_top(dBox, dTop)
+        box.set_right(dBox, bar_index + 1)
+        box.set_bottom(dBox, dBot)
+        box.set_left(sBox, sBar)
+        box.set_top(sBox, sTop)
+        box.set_right(sBox, bar_index + 1)
+        box.set_bottom(sBox, sBot)
+        line.set_xy1(dTick, dBar, dTop)
+        line.set_xy2(dTick, bar_index + 1, dTop)
+        line.set_xy1(sTick, sBar, sBot)
+        line.set_xy2(sTick, bar_index + 1, sBot)
+else
+    if not na(dBox)
+        box.delete(dBox)
+        box.delete(sBox)
+        line.delete(dTick)
+        line.delete(sTick)
+        dBox := na
+        sBox := na
+        dTick := na
+        sTick := na
+
+if replaced and not na(stopLine)
+    line.delete(stopLine)
+    line.delete(targetLine)
+    stopLine := na
+    targetLine := na
+
+if longEntry or shortEntry
+    stopLine := line.new(bar_index, stopPx, bar_index + 1, stopPx, color=color.new(supplyColor, 10), style=line.style_dotted, width=1)
+    targetLine := line.new(bar_index, targetPx, bar_index + 1, targetPx, color=color.new(demandColor, 10), style=line.style_dotted, width=1)
+else if not na(stopLine)
+    line.set_x2(stopLine, bar_index + 1)
+    line.set_x2(targetLine, bar_index + 1)
+
+plotshape(longEntry, title="Long entry", style=shape.triangleup, location=location.belowbar, color=demandColor, size=size.tiny, text="Long")
+plotshape(shortEntry, title="Short entry", style=shape.triangledown, location=location.abovebar, color=supplyColor, size=size.tiny, text="Short")
+
+plot(separated ? dTop : na, "Highest tick of the lowest bar", display=display.data_window)
+plot(separated ? sBot : na, "Lowest tick of the highest bar", display=display.data_window)
+
+if barstate.islast
+    if not na(info)
+        label.delete(info)
+    string txt = "Waiting for a highest bar and a lowest bar"
+    if not separated
+        txt := "Waiting for a highest bar and a lowest bar"
+    else if phase == 5
+        txt := "Price traded through a zone. This swing is off."
+    else if phase == 1
+        txt := "Between the zones. The first hit picks the side."
+    else if phase == 2 and side == 1
+        txt := "Demand first. Waiting for it to hold."
+    else if phase == 2 and side == -1
+        txt := "Supply first. Waiting for it to hold."
+    else if phase == 3 and side == 1
+        txt := "Demand held. Waiting for the return to its high tick."
+    else if phase == 3 and side == -1
+        txt := "Supply held. Waiting for the return to its low tick."
+    else if phase == 4 and side == 1
+        txt := "Long " + str.tostring(entryPx, format.mintick) + "  ·  stop " + str.tostring(stopPx, format.mintick) + "  ·  target " + str.tostring(targetPx, format.mintick)
+    else if phase == 4 and side == -1
+        txt := "Short " + str.tostring(entryPx, format.mintick) + "  ·  stop " + str.tostring(stopPx, format.mintick) + "  ·  target " + str.tostring(targetPx, format.mintick)
+    else
+        txt := "Zones marked. Waiting for price to sit between them."
+    info := label.new(bar_index, high, txt, style=label.style_label_down, color=color.new(#121815, 10), textcolor=color.new(#e6eee4, 0), size=size.small)
+
+alertcondition(longEntry, "Long entry", "Demand was hit first. Price held and came back to the highest tick of the lowest bar.")
+alertcondition(shortEntry, "Short entry", "Supply was hit first. Price held and came back to the lowest tick of the highest bar.")
