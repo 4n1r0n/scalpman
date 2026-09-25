@@ -1,0 +1,27 @@
+name: Release 0.1.1
+
+on:
+  push:
+    paths:
+      - .github/workflows/release-0.1.1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish v0.1.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view v0.1.1 --repo 4n1r0n/scalpman >/dev/null 2>&1; then
+            echo "v0.1.1 already exists"
+            exit 0
+          fi
+          gh release create v0.1.1 \
+            --repo 4n1r0n/scalpman \
+            --target 23a19f26883ff28f5b8095228a983665bce16e5f \
+            --title "0.1.1" \
+            --notes $'Fixes TradingView runtime error 10026.\n\nDemand and supply boxes, tick lines, and the stop and target lines were anchored to bar indexes that stay at the old pivot. TradingView rejects a drawing whose bar index is too far from the current bar. Those drawings now use the pivot bar time. The indicator rules are unchanged.'
