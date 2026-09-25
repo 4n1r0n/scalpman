@@ -1,6 +1,6 @@
 //@version=6
 // Opposing Tick Zones
-// Version 0.1
+// Version 0.1.1
 // From TradingLab's short "How To Find PERFECT Entries" (https://www.youtube.com/shorts/tS9o8aQjADY).
 // On the 1 hour chart they mark the highest tick of the lowest bar and the lowest tick of the
 // highest bar. Those bars are the demand and supply areas. Whichever area is hit first is the
@@ -16,9 +16,11 @@ pl = ta.pivotlow(low, strength, strength)
 var float dTop = na
 var float dBot = na
 var int dBar = na
+var int dTime = na
 var float sTop = na
 var float sBot = na
 var int sBar = na
+var int sTime = na
 
 // 0 idle, 1 armed, 2 biased, 3 respected, 4 entered, 5 invalid
 var int phase = 0
@@ -42,12 +44,14 @@ if not na(ph) and (na(sTop) or ph > sTop)
     sTop := ph
     sBot := low[strength]
     sBar := bar_index - strength
+    sTime := time[strength]
     replaced := true
 
 if not na(pl) and (na(dBot) or pl < dBot)
     dTop := high[strength]
     dBot := pl
     dBar := bar_index - strength
+    dTime := time[strength]
     replaced := true
 
 if replaced
@@ -123,25 +127,30 @@ demandColor = color.new(#3cba7a, 0)
 supplyColor = color.new(#e36a5c, 0)
 tickColor = color.new(#e3b15a, 0)
 
+// Bar-index anchors throw runtime error 10026 once a pivot is more than about
+// 10,000 bars behind the current bar. Time coordinates are not bound to that window.
+int barSpan = nz(time - time[1])
+int rightTime = time + barSpan
+
 if separated
     if na(dBox)
-        dBox := box.new(dBar, dTop, bar_index + 1, dBot, border_color=color.new(demandColor, 35), bgcolor=color.new(demandColor, 88))
-        sBox := box.new(sBar, sTop, bar_index + 1, sBot, border_color=color.new(supplyColor, 35), bgcolor=color.new(supplyColor, 88))
-        dTick := line.new(dBar, dTop, bar_index + 1, dTop, color=tickColor, style=line.style_dashed, width=1)
-        sTick := line.new(sBar, sBot, bar_index + 1, sBot, color=tickColor, style=line.style_dashed, width=1)
+        dBox := box.new(dTime, dTop, rightTime, dBot, border_color=color.new(demandColor, 35), bgcolor=color.new(demandColor, 88), xloc=xloc.bar_time)
+        sBox := box.new(sTime, sTop, rightTime, sBot, border_color=color.new(supplyColor, 35), bgcolor=color.new(supplyColor, 88), xloc=xloc.bar_time)
+        dTick := line.new(dTime, dTop, rightTime, dTop, xloc=xloc.bar_time, color=tickColor, style=line.style_dashed, width=1)
+        sTick := line.new(sTime, sBot, rightTime, sBot, xloc=xloc.bar_time, color=tickColor, style=line.style_dashed, width=1)
     else
-        box.set_left(dBox, dBar)
+        box.set_left(dBox, dTime)
         box.set_top(dBox, dTop)
-        box.set_right(dBox, bar_index + 1)
+        box.set_right(dBox, rightTime)
         box.set_bottom(dBox, dBot)
-        box.set_left(sBox, sBar)
+        box.set_left(sBox, sTime)
         box.set_top(sBox, sTop)
-        box.set_right(sBox, bar_index + 1)
+        box.set_right(sBox, rightTime)
         box.set_bottom(sBox, sBot)
-        line.set_xy1(dTick, dBar, dTop)
-        line.set_xy2(dTick, bar_index + 1, dTop)
-        line.set_xy1(sTick, sBar, sBot)
-        line.set_xy2(sTick, bar_index + 1, sBot)
+        line.set_xy1(dTick, dTime, dTop)
+        line.set_xy2(dTick, rightTime, dTop)
+        line.set_xy1(sTick, sTime, sBot)
+        line.set_xy2(sTick, rightTime, sBot)
 else
     if not na(dBox)
         box.delete(dBox)
@@ -160,11 +169,11 @@ if replaced and not na(stopLine)
     targetLine := na
 
 if longEntry or shortEntry
-    stopLine := line.new(bar_index, stopPx, bar_index + 1, stopPx, color=color.new(supplyColor, 10), style=line.style_dotted, width=1)
-    targetLine := line.new(bar_index, targetPx, bar_index + 1, targetPx, color=color.new(demandColor, 10), style=line.style_dotted, width=1)
+    stopLine := line.new(time, stopPx, rightTime, stopPx, xloc=xloc.bar_time, color=color.new(supplyColor, 10), style=line.style_dotted, width=1)
+    targetLine := line.new(time, targetPx, rightTime, targetPx, xloc=xloc.bar_time, color=color.new(demandColor, 10), style=line.style_dotted, width=1)
 else if not na(stopLine)
-    line.set_x2(stopLine, bar_index + 1)
-    line.set_x2(targetLine, bar_index + 1)
+    line.set_x2(stopLine, rightTime)
+    line.set_x2(targetLine, rightTime)
 
 plotshape(longEntry, title="Long entry", style=shape.triangleup, location=location.belowbar, color=demandColor, size=size.tiny, text="Long")
 plotshape(shortEntry, title="Short entry", style=shape.triangledown, location=location.abovebar, color=supplyColor, size=size.tiny, text="Short")

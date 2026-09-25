@@ -1,6 +1,6 @@
 # Opposing Tick Zones
 
-Version 0.1.
+Version 0.1.1.
 
 A Pine Script v6 chart indicator based on TradingLab’s short [How To Find PERFECT Entries](https://www.youtube.com/shorts/tS9o8aQjADY).
 
@@ -23,4 +23,4 @@ On a 1 hour trend, mark the highest tick of the lowest bar and the lowest tick o
 3. Paste `opposing-tick-zones.pine`.
 4. Click Add to chart.
 
-This is version 0.1, the first release.
+Version 0.1.1 fixes TradingView runtime error 10026. The zones are drawn from the pivot bar’s time, so a long chart no longer rejects the old bar index. The rules are unchanged from 0.1.
